@@ -736,7 +736,7 @@ function submitQuiz(fromTimer) {
     if (isFirstOfPair) {
       const gq2 = rawGraded[gi + 1];
       // Combined score: both correct=1, one correct=0.5, none=0
-      const combinedScore = (gq.score + gq2.score) / 2;
+      const combinedScore = gq.score + gq2.score; // each blank already 0 or 0.5, sum = 0, 0.5, or 1
       const combinedResult = combinedScore === 1 ? 'correct' : combinedScore > 0 ? 'half' : (gq.result === 'skipped' && gq2.result === 'skipped' ? 'skipped' : 'wrong');
       // Keep both as separate entries but with combined score reflected
       gradedQuestions.push({ ...gq,  score: gq.score,  result: gq.result,  flagged: false, flagReason: '', pairScore: combinedScore, pairResult: combinedResult });
