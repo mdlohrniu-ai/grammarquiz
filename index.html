@@ -388,7 +388,7 @@ body {
   <div class="quiz-body" id="quiz-body"></div>
   <div class="submit-bar">
     <div class="progress-info" id="progress-info"></div>
-    <button class="btn" id="submit-btn" onclick="submitQuiz(false)">Submit Quiz</button>
+    <button class="btn" id="submit-btn" onclick="confirmSubmit()">Submit Quiz</button>
   </div>
 </div>
 
@@ -792,6 +792,11 @@ function gradeAnswer(studentAnswer, correctAnswer) {
 }
 
 // ── SUBMIT QUIZ (go to review) ────────────────────────────────────────────────
+function confirmSubmit() {
+  const confirmed = confirm('Are you sure you want to submit? You cannot change your answers after submitting.');
+  if (confirmed) submitQuiz(false);
+}
+
 async function submitQuiz(fromTimer) {
   clearInterval(timerInterval);
 
