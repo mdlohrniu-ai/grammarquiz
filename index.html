@@ -105,19 +105,54 @@ body {
 .quiz-body { width:100%; max-width:760px; padding:2rem 1rem; display:flex; flex-direction:column; gap:2rem; }
 
 /* Section headers */
+.section-unit-block {
+  margin-top:1.25rem;
+  margin-bottom:0.5rem;
+  padding-bottom:0.4rem;
+  border-bottom:2px solid var(--accent);
+}
+.section-unit { font-family:'Fraunces',serif; font-size:1.15rem; font-weight:600; color:var(--accent); }
 .section-header {
   border-left:4px solid var(--accent);
   padding:0.5rem 0 0.5rem 1rem;
+  margin-top:0.75rem;
+  margin-bottom:0.25rem;
 }
-.section-unit { font-family:'Fraunces',serif; font-size:1.1rem; font-weight:600; color:var(--accent); }
-.section-part { font-size:0.85rem; color:var(--ink-soft); margin-top:0.2rem; }
+.section-part { font-size:0.9rem; font-weight:600; color:var(--ink-soft); }
 .section-instruction {
   background:var(--accent-light);
   border-radius:0.6rem;
-  padding:0.7rem 1rem;
-  font-size:0.9rem;
+  padding:0.8rem 1rem;
+  font-size:0.92rem;
   color:var(--accent);
   margin-top:0.5rem;
+  line-height:1.5;
+}
+.example-block {
+  background:#F0F7FF;
+  border:1.5px dashed var(--accent);
+  border-radius:0.6rem;
+  padding:0.75rem 1rem;
+  margin:0.6rem 0 0.75rem 0;
+  font-size:0.9rem;
+}
+.example-label {
+  font-size:0.72rem;
+  font-weight:700;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color:var(--accent);
+  margin-bottom:0.4rem;
+}
+.example-question { color:var(--ink); margin-bottom:0.3rem; }
+.example-answer {
+  display:inline-block;
+  background:var(--accent);
+  color:#fff;
+  border-radius:4px;
+  padding:1px 8px;
+  font-size:0.88rem;
+  margin-top:0.2rem;
 }
 
 /* Question rows */
@@ -698,15 +733,21 @@ function renderQuizBody() {
 
   // Group consecutive questions sharing the same sentence (blankIndex 0 and 1)
   let i = 0;
+  let displayNum = 0; // tracks real question number, excluding examples
   while (i < qs.length) {
     const q = qs[i];
 
     // Section header if unit or part changes
     if (q.unit !== lastUnit || q.part !== lastPart) {
-      const sec = document.createElement('div');
       const isNewUnit = q.unit !== lastUnit;
+      if (isNewUnit) {
+        const unitBlock = document.createElement('div');
+        unitBlock.className = 'section-unit-block';
+        unitBlock.innerHTML = '<div class="section-unit">' + q.unit + '</div>';
+        body.appendChild(unitBlock);
+      }
+      const sec = document.createElement('div');
       sec.innerHTML = '<div class="section-header">' +
-        (isNewUnit ? '<div class="section-unit">' + q.unit + '</div>' : '') +
         '<div class="section-part">' + q.part + '</div>' +
         '<div class="section-instruction">' + q.instruction + '</div>' +
         '</div>';
@@ -715,15 +756,35 @@ function renderQuizBody() {
       lastPart = q.part;
     }
 
+    // Example question — display only, not graded
+    if (q.isExample) {
+      const ex = document.createElement('div');
+      ex.className = 'example-block';
+      // Format the question the same way as real questions (replace blanks with input)
+      const exFormatted = q.question.replace(/_+/g,
+        '<span style="display:inline-block;min-width:80px;border-bottom:2px solid var(--accent);margin:0 2px;vertical-align:bottom">&nbsp;</span>'
+      );
+      ex.innerHTML =
+        '<div class="example-label">📝 Example（例）</div>' +
+        '<div class="example-question" style="margin-bottom:0.5rem">' + exFormatted + '</div>' +
+        '<input class="q-input" type="text" value="' + q.answer.replace(/"/g, '&quot;') + '" ' +
+        'readonly style="background:var(--accent-light);color:var(--accent);font-weight:600;cursor:default;" ' +
+        'autocomplete="off" autocorrect="off" spellcheck="false">';
+      body.appendChild(ex);
+      i++;
+      continue;
+    }
+
     // Check if this is first of a double-blank pair
     const isFirstOfPair = q.blankIndex === 0 && i + 1 < qs.length && qs[i+1].blankIndex === 1 && qs[i+1].question === q.question;
 
+    displayNum++;
     if (isFirstOfPair) {
       const q2 = qs[i + 1];
       // Split question at blanks — show sentence once, two input boxes
       const row = document.createElement('div');
       row.className = 'question-row';
-      row.innerHTML = '<div class="q-num">' + q.number + '.</div>' +
+      row.innerHTML = '<div class="q-num">' + displayNum + '.</div>' +
         '<div class="q-content">' +
         '<div class="q-sentence">' + formatQuestionDouble(q.question, i, i+1) + '</div>' +
         '</div>';
@@ -733,7 +794,7 @@ function renderQuizBody() {
       // Normal single-blank question
       const row = document.createElement('div');
       row.className = 'question-row';
-      row.innerHTML = '<div class="q-num">' + q.number + '.</div>' +
+      row.innerHTML = '<div class="q-num">' + displayNum + '.</div>' +
         '<div class="q-content">' +
         '<div class="q-sentence">' + formatQuestion(q.question) + '</div>' +
         '<input class="q-input" type="text" id="input-' + i + '"' +
@@ -773,9 +834,15 @@ function saveAnswer(i, val) {
 }
 
 function updateProgress() {
-  const answered = answers.filter(a => a.trim() !== '').length;
+  // Exclude example questions from the count
+  const nonExamples = studentData.questions.filter(q => !q.isExample && String(q.number).toUpperCase() !== 'EX');
+  const total = nonExamples.length;
+  const answered = nonExamples.filter((q, i) => {
+    const idx = studentData.questions.indexOf(q);
+    return answers[idx] && answers[idx].trim() !== '';
+  }).length;
   document.getElementById('progress-info').innerHTML =
-    `<strong>${answered}</strong> of <strong>${studentData.questions.length}</strong> answered`;
+    `<strong>${answered}</strong> of <strong>${total}</strong> answered`;
 }
 
 // ── TIMER ─────────────────────────────────────────────────────────────────────
@@ -863,8 +930,11 @@ async function submitQuiz(fromTimer) {
     if (input) answers[i] = input.value.trim();
   });
 
-  // Grade all questions — handle double-blank pairs with combined scoring
+  // Grade all questions — skip examples, handle double-blank pairs
   const rawGraded = studentData.questions.map((q, i) => {
+    if (q.isExample) {
+      return { ...q, studentAnswer: q.answer, correctAnswer: q.answer, result: 'example', score: 0, flagged: false, flagReason: '' };
+    }
     const isInPair = q.blankIndex === 0 || q.blankIndex === 1;
     const { result, score } = isInPair
       ? gradeAnswerHalf(answers[i], q.answer)
@@ -939,28 +1009,54 @@ async function submitQuiz(fromTimer) {
   };
 
   // ── Submit to Google Sheets NOW, before showing results ───
-  try {
-    if (MOCK_MODE) {
-      await new Promise(r => setTimeout(r, 800));
-      MOCK_SUBMITTED[String(studentData.studentNumber)] = {
-        name: studentData.name, week: studentData.week,
-        score: R.totalPoints, total: 40
-      };
-      console.log('MOCK SUBMIT — payload:', JSON.stringify(payload, null, 2));
-    } else {
-      await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+  // Retry up to 3 times if submission fails or row count is incomplete
+  const MAX_RETRIES = 3;
+  let submitSuccess = false;
+
+  if (MOCK_MODE) {
+    await new Promise(r => setTimeout(r, 800));
+    MOCK_SUBMITTED[String(studentData.studentNumber)] = {
+      name: studentData.name, week: studentData.week,
+      score: R.totalPoints, total: 40
+    };
+    console.log('MOCK SUBMIT — payload:', JSON.stringify(payload, null, 2));
+    submitSuccess = true;
+  } else {
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        // Use a verification-capable fetch (same-origin redirect handled by GAS)
+        const res = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        // no-cors means we can't read the response body directly,
+        // so do a quick GET verification after posting
+        await new Promise(r => setTimeout(r, 1500)); // wait for write to complete
+        const verifyRes = await fetch(
+          `${SCRIPT_URL}?action=verifySubmission&student=${encodeURIComponent(studentData.studentNumber)}&week=${encodeURIComponent(studentData.week)}`
+        );
+        const verifyData = await verifyRes.json();
+        if (verifyData.complete) {
+          submitSuccess = true;
+          console.log(`Submission verified on attempt ${attempt}`);
+          break;
+        } else {
+          console.warn(`Attempt ${attempt}: incomplete write (${verifyData.written}/${verifyData.expected}), retrying...`);
+          if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 2000 * attempt));
+        }
+      } catch(err) {
+        console.warn(`Attempt ${attempt} failed:`, err);
+        if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 2000 * attempt));
+      }
     }
-  } catch(err) {
-    // Submission failed — warn student but still allow review
-    console.warn('Submission error:', err);
+  }
+
+  if (!submitSuccess) {
     const errBanner = document.createElement('div');
     errBanner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#b83232;color:white;text-align:center;padding:0.75rem;font-size:0.9rem;z-index:999';
-    errBanner.textContent = '⚠️ Submission failed. Please check your connection and contact your teacher.';
+    errBanner.textContent = '⚠️ Submission may be incomplete. Please tell your teacher immediately.';
     document.body.appendChild(errBanner);
   }
 
@@ -985,6 +1081,7 @@ function calcUnitResults(questions) {
     let total = 0;
     let score = 0;
     u.questions.forEach(uq => {
+      if (uq.isExample || String(uq.number).toUpperCase() === 'EX') return; // skip examples
       if (uq.blankIndex === 1) return; // skip second blank — already counted via blankIndex=0
       total += 1;
       if (uq.blankIndex === 0 && uq.pairScore !== undefined) {
@@ -1143,14 +1240,55 @@ function renderResults(fromTimer) {
   // Question rows — handle double-blank pairs
   let lastUnit = null, lastPart = null;
   let j = 0;
+  let displayNumR = 0; // tracks real question number, excluding examples
   while (j < gradedQuestions.length) {
     const q = gradedQuestions[j];
 
+    // Skip example questions — render as example block, not a graded row
+    if (q.isExample || String(q.number).toUpperCase() === 'EX') {
+      if (q.unit !== lastUnit || q.part !== lastPart) {
+        const isNewUnit = q.unit !== lastUnit;
+        if (isNewUnit) {
+          const unitBlock = document.createElement('div');
+          unitBlock.className = 'section-unit-block';
+          unitBlock.innerHTML = '<div class="section-unit">' + q.unit + '</div>';
+          body.appendChild(unitBlock);
+        }
+        const sec = document.createElement('div');
+        sec.innerHTML = '<div class="section-header">' +
+          '<div class="section-part">' + q.part + '</div>' +
+          '<div class="section-instruction">' + q.instruction + '</div>' +
+          '</div>';
+        body.appendChild(sec);
+        lastUnit = q.unit;
+        lastPart = q.part;
+      }
+      const ex = document.createElement('div');
+      ex.className = 'example-block';
+      const exFormatted = q.question.replace(/_+/g,
+        '<span style="display:inline-block;min-width:80px;border-bottom:2px solid var(--accent);margin:0 2px;vertical-align:bottom">&nbsp;</span>'
+      );
+      ex.innerHTML =
+        '<div class="example-label">📝 Example（例）</div>' +
+        '<div class="example-question" style="margin-bottom:0.5rem">' + exFormatted + '</div>' +
+        '<input class="q-input" type="text" value="' + (q.answer || q.correctAnswer || '').replace(/"/g, '&quot;') + '" ' +
+        'readonly style="background:var(--accent-light);color:var(--accent);font-weight:600;cursor:default;" ' +
+        'autocomplete="off" autocorrect="off" spellcheck="false">';
+      body.appendChild(ex);
+      j++;
+      continue;
+    }
+
     if (q.unit !== lastUnit || q.part !== lastPart) {
-      const sec = document.createElement('div');
       const isNewUnit = q.unit !== lastUnit;
+      if (isNewUnit) {
+        const unitBlock = document.createElement('div');
+        unitBlock.className = 'section-unit-block';
+        unitBlock.innerHTML = '<div class="section-unit">' + q.unit + '</div>';
+        body.appendChild(unitBlock);
+      }
+      const sec = document.createElement('div');
       sec.innerHTML = '<div class="section-header">' +
-        (isNewUnit ? '<div class="section-unit">' + q.unit + '</div>' : '') +
         '<div class="section-part">' + q.part + '</div>' +
         '<div class="section-instruction">' + q.instruction + '</div>' +
         '</div>';
@@ -1159,8 +1297,9 @@ function renderResults(fromTimer) {
       lastPart = q.part;
     }
 
-    const scoreLabels = { correct: '+1 pt', half: '+0.5 pt', wrong: '0 pt', skipped: '0 pt' };
+    const scoreLabels = { correct: '+1 pt', half: '+0.5 pt', wrong: '0 pt', skipped: '0 pt', example: '' };
 
+    displayNumR++;
     // Check if this is first of a double-blank pair
     const isFirstOfPair = q.blankIndex === 0 &&
       j + 1 < gradedQuestions.length &&
@@ -1193,7 +1332,7 @@ function renderResults(fromTimer) {
 
       const row = document.createElement('div');
       row.className = 'result-row';
-      row.innerHTML = '<div class="q-num">' + q.number + '.</div>' +
+      row.innerHTML = '<div class="q-num">' + displayNumR + '.</div>' +
         '<div class="result-content">' +
         '<div class="result-sentence">' + formatQuestion(q.question) + '</div>' +
         makeBlankResult(q, j) +
@@ -1214,7 +1353,7 @@ function renderResults(fromTimer) {
 
       const row = document.createElement('div');
       row.className = 'result-row';
-      row.innerHTML = '<div class="q-num">' + q.number + '.</div>' +
+      row.innerHTML = '<div class="q-num">' + displayNumR + '.</div>' +
         '<div class="result-content">' +
         '<div class="result-sentence">' + formatQuestion(q.question) + '</div>' +
         '<div class="answer-box ' + q.result + '" id="answer-box-' + j + '">' +
