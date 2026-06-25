@@ -1,3 +1,8 @@
+<!-- ════════════════════════════════════════════════════
+     THIS FILE = EWSI GRAMMAR QUIZ
+     SCRIPT_URL ends in: ...KOc5A/exec
+     Upload as index.html in the "grammarquiz" repo (EWSI)
+════════════════════════════════════════════════════ -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -656,6 +661,10 @@ async function loadQuiz() {
 
     if (data.found) {
       // ── Check localStorage for a previously failed submission ──────────────
+      // If the student had a submission fail (e.g. POST never reached GAS),
+      // their answers are saved in localStorage. Attempt to resend before
+      // proceeding to the quiz. This handles the case where the student
+      // got the failure screen and is logging back in on the same device.
       const savedSubmission = lsLoad(num, data.week);
       if (savedSubmission && savedSubmission.payload && savedSubmission.gradedQuestions && savedSubmission.gradedQuestions.length > 0) {
         document.getElementById('login-loading').style.display = 'block';
@@ -685,6 +694,7 @@ async function loadQuiz() {
         document.getElementById('login-loading').style.display = 'none';
         document.getElementById('login-loading').textContent = 'Looking up your quiz…';
         document.querySelector('#login .btn').disabled = false;
+        // Show confirmation screen so student/teacher knows the outcome
         studentData = { studentNumber: num, name: data.name, week: data.week, noReview: data.noReview === true };
         gradedQuestions = savedSubmission.gradedQuestions;
         window._submittedPayload = savedSubmission.payload;
@@ -1467,6 +1477,7 @@ function updateFlagCount() {
 async function finalSubmit() {
   document.getElementById('final-submit-btn').disabled = true;
   document.getElementById('final-submit-btn').textContent = 'Saving…';
+  // Now safe to clear localStorage — student has confirmed submission
   if (!isRelogin) lsClear(studentData.studentNumber, studentData.week);
 
   const flagged = gradedQuestions.filter(q => q.flagged);
@@ -1514,6 +1525,19 @@ function showError(id, msg) {
   const el = document.getElementById(id);
   el.textContent = msg; el.style.display = msg ? 'block' : 'none';
 }
+
+// ── AUTO-LOGIN FROM DASHBOARD ──────────────────────────────────────────────
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const autoStudent = params.get('student');
+  if (autoStudent) {
+    const input = document.getElementById('student-num-input');
+    if (input) {
+      input.value = autoStudent;
+      loadQuiz();
+    }
+  }
+})();
 </script>
 
 <!-- FLAG MODAL -->
